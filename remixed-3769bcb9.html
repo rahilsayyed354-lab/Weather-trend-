@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Weather Pattern Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0F1924;
+    --panel: #16232F;
+    --panel-border: #243443;
+    --text: #E7EEF3;
+    --muted: #7B93A8;
+    --temp: #5FD4D4;
+    --sun: #F4A93C;
+    --rain: #4D7CFE;
+    --warn: #E8654A;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+    background-image:
+      radial-gradient(circle at 85% 0%, rgba(95, 212, 212, 0.06), transparent 40%),
+      radial-gradient(circle at 0% 100%, rgba(244, 169, 60, 0.05), transparent 45%);
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 20px;
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--temp);
+  }
+
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: clamp(28px, 6vw, 42px);
+    letter-spacing: -0.01em;
+  }
+
+  .sub { color: var(--muted); font-size: 14px; max-width: 520px; }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .city-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    color: var(--muted);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .city-btn:hover { border-color: var(--temp); color: var(--text); }
+  .city-btn.active {
+    border-color: var(--temp);
+    color: var(--temp);
+    background: rgba(95, 212, 212, 0.07);
+  }
+  .city-btn:focus-visible { outline: 2px solid var(--temp); outline-offset: 2px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+
+  .panel h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel h2 .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .full { grid-column: 1 / -1; }
+
+  canvas { max-height: 280px; }
+
+  /* Dial signature element */
+  .dial-row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .dial-wrap { position: relative; width: 180px; height: 180px; flex-shrink: 0; }
+
+  .dial-svg { transform: rotate(-90deg); }
+
+  .dial-track { fill: none; stroke: var(--panel-border); stroke-width: 12; }
+  .dial-arc {
+    fill: none;
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.6s cubic-bezier(.4,0,.2,1), stroke 0.4s;
+  }
+
+  .dial-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .dial-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 34px; font-weight: 700;
+    transition: color 0.4s;
+  }
+  .dial-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-top: 2px;
+  }
+
+  .dial-stats { flex: 1; min-width: 180px; }
+  .stat-row {
+    display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--muted); }
+
+  .month-slider-wrap { margin-top: 16px; }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--temp);
+    height: 4px;
+  }
+  .month-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    margin-bottom: 6px;
+  }
+
+  .legend-row {
+    display: flex; gap: 16px; font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--muted); margin-top: 10px; flex-wrap: wrap;
+  }
+  .legend-row span { display: flex; align-items: center; gap: 6px; }
+  .legend-row .sw { width: 10px; height: 10px; border-radius: 2px; }
+
+  footer {
+    text-align: center;
+    margin-top: 32px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Climate dataset · 12-month sample</div>
+    <h1>Weather Pattern Analysis</h1>
+    <p class="sub">Monthly temperature, rainfall, and humidity trends across three sample cities. Pick a city, then drag the dial below to inspect any month.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Select city">
+    <button class="city-btn active" data-city="delhi">Delhi</button>
+    <button class="city-btn" data-city="london">London</button>
+    <button class="city-btn" data-city="nairobi">Nairobi</button>
+  </div>
+
+  <div class="grid">
+    <div class="panel full">
+      <h2><span class="dot" style="background:var(--temp)"></span>Temperature &amp; rainfall by month</h2>
+      <canvas id="mainChart"></canvas>
+      <div class="legend-row">
+        <span><span class="sw" style="background:var(--temp)"></span>Avg temp (°C)</span>
+        <span><span class="sw" style="background:var(--rain)"></span>Rainfall (mm)</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="dot" style="background:var(--sun)"></span>Month inspector</h2>
+      <div class="dial-row">
+        <div class="dial-wrap">
+          <svg class="dial-svg" width="180" height="180" viewBox="0 0 180 180">
+            <circle class="dial-track" cx="90" cy="90" r="74"></circle>
+            <circle id="dialArc" class="dial-arc" cx="90" cy="90" r="74" stroke="#5FD4D4"
+              stroke-dasharray="0 465"></circle>
+          </svg>
+          <div class="dial-center">
+            <div class="dial-value" id="dialValue">--</div>
+            <div class="dial-label">Avg temp °C</div>
+          </div>
+        </div>
+        <div class="dial-stats">
+          <div class="month-name" id="monthName">January</div>
+          <div class="stat-row"><span class="label">Rainfall</span><span id="statRain">--</span></div>
+          <div class="stat-row"><span class="label">Humidity</span><span id="statHumidity">--</span></div>
+          <div class="stat-row"><span class="label">Vs. annual avg</span><span id="statDiff">--</span></div>
+        </div>
+      </div>
+      <div class="month-slider-wrap">
+        <input type="range" id="monthSlider" min="0" max="11" value="0" step="1" aria-label="Select month">
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2><span class="dot" style="background:var(--rain)"></span>Humidity distribution</h2>
+      <canvas id="humidityChart"></canvas>
+    </div>
+  </div>
+
+  <footer>Sample dataset for demonstration · weather-pattern-analysis</footer>
+</div>
+
+<script>
+const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+const datasets = {
+  delhi: {
+    temp:     [14,17,23,29,33,34,31,30,29,26,20,15],
+    rain:     [21,18,15,7,13,60,180,200,120,15,3,8],
+    humidity: [55,48,38,30,38,58,78,82,75,55,50,55],
+    color: "#5FD4D4"
+  },
+  london: {
+    temp:     [5,5,8,11,14,17,19,19,16,12,8,5],
+    rain:     [55,40,42,48,46,45,44,52,50,68,65,55],
+    humidity: [82,78,75,70,68,68,70,72,76,80,82,84],
+    color: "#4D7CFE"
+  },
+  nairobi: {
+    temp:     [19,20,21,21,20,19,18,18,19,20,20,19],
+    rain:     [60,65,100,180,150,40,15,25,35,55,105,80],
+    humidity: [62,60,65,75,78,72,68,68,65,62,68,68],
+    color: "#F4A93C"
+  }
+};
+
+let currentCity = "delhi";
+let mainChart, humidityChart;
+
+function buildCharts() {
+  const d = datasets[currentCity];
+  const ctx = document.getElementById('mainChart');
+  if (mainChart) mainChart.destroy();
+  mainChart = new Chart(ctx, {
+    data: {
+      labels: months,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Rainfall (mm)',
+          data: d.rain,
+          backgroundColor: 'rgba(77,124,254,0.35)',
+          borderRadius: 4,
+          yAxisID: 'y1',
+          order: 2
+        },
+        {
+          type: 'line',
+          label: 'Avg temp (°C)',
+          data: d.temp,
+          borderColor: d.color,
+          backgroundColor: d.color,
+          tension: 0.35,
+          pointRadius: 3,
+          pointBackgroundColor: d.color,
+          yAxisID: 'y',
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#7B93A8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#243443' } },
+        y: { position: 'left', ticks: { color: '#7B93A8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#243443' }, title: { display: true, text: '°C', color: '#7B93A8' } },
+        y1: { position: 'right', ticks: { color: '#7B93A8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { display: false }, title: { display: true, text: 'mm', color: '#7B93A8' } }
+      }
+    }
+  });
+
+  const hctx = document.getElementById('humidityChart');
+  if (humidityChart) humidityChart.destroy();
+  humidityChart = new Chart(hctx, {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m.slice(0,3)),
+      datasets: [{
+        label: 'Humidity %',
+        data: d.humidity,
+        backgroundColor: 'rgba(244,169,60,0.5)',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#7B93A8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: '#7B93A8', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: '#243443' }, suggestedMax: 100 }
+      }
+    }
+  });
+
+  updateDial();
+}
+
+function updateDial() {
+  const d = datasets[currentCity];
+  const idx = parseInt(document.getElementById('monthSlider').value, 10);
+  const temp = d.temp[idx];
+  const minT = Math.min(...d.temp);
+  const maxT = Math.max(...d.temp);
+  const avgT = (d.temp.reduce((a,b)=>a+b,0) / 12);
+
+  document.getElementById('monthName').textContent = months[idx];
+  document.getElementById('dialValue').textContent = temp + '°';
+  document.getElementById('statRain').textContent = d.rain[idx] + ' mm';
+  document.getElementById('statHumidity').textContent = d.humidity[idx] + '%';
+  const diff = (temp - avgT);
+  document.getElementById('statDiff').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '°C';
+
+  const circumference = 2 * Math.PI * 74;
+  const range = maxT - minT || 1;
+  const frac = (temp - minT) / range;
+  const arcLen = frac * circumference * 0.75;
+  const arc = document.getElementById('dialArc');
+  arc.setAttribute('stroke-dasharray', arcLen + ' ' + circumference);
+  arc.setAttribute('stroke', d.color);
+  document.getElementById('dialValue').style.color = d.color;
+}
+
+document.querySelectorAll('.city-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.city-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCity = btn.dataset.city;
+    buildCharts();
+  });
+});
+
+document.getElementById('monthSlider').addEventListener('input', updateDial);
+
+buildCharts();
+</script>
+</body>
+</html>
